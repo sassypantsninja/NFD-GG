@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+contract NFDToken is ERC20, Ownable {
+    constructor(uint256 initialSupply) ERC20("NFDToken", "NFD") {
+        _mint(msg.sender, initialSupply);
+    }
+
+    function mint(address to, uint256 amount) external onlyOwner {
+        _mint(to, amount);
+    }
+
+    function burn(address from, uint256 amount) external onlyOwner {
+        _burn(from, amount);
+    }
+}
+
+contract NFDGG is ERC721, Ownable {
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+
+    struct NFTData {
+        uint256 level;
+        uint256 power;
+        uint256 agility;
+        uint256 intelligence;
+    }
+
+    mapping(uint256 => NFTData) public nftData;
+    mapping(address => bool) public whitelist;
+    NFDToken public nfdToken;
+
+    event Minted(address indexed owner, uint256 tokenId);
+    event LevelUp(uint256 indexed tokenId, uint256 newLevel);
+    event RewardClaimed(address indexed player, uint256 amount);
+
+    constructor(address tokenAddress) ERC721("NFDGG", "NFDG") {
+        nfdToken = NFDToken(tokenAddress);
+    }
+
+    function mintNFT() external {
+        require(whitelist[msg.sender], "Not whitelisted");
+
+        _tokenIds.increment();
+        uint256 newItemId = _tokenIds.current();
+
+        _mint(msg.sender, newItemId);
+
+        nftData[newItemId] = NFTData({
+            level: 1,
+            power: 10,
+            agility: 10,
+            intelligence: 10
+        });
+
+        emit Minted(msg.sender, newItemId);
+    }
+
+    function levelUp(uint256 tokenId) external {
+        require(ownerOf(tokenId) == msg.sender, "Not the owner of this NFT");
+
+        NFTData storage nft = nftData[tokenId];
+        nft.level += 1;
+        nft.power += 5;
+        nft.agility += 5;
+        nft.intelligence += 5;
+
+        emit LevelUp(tokenId, nft.level);
+    }
+
+    function claimReward(uint256 tokenId) external {
+        require(ownerOf(tokenId) == msg.sender, "Not the owner of this NFT");
+
+        NFTData memory nft = nftData[tokenId];
+        uint256 reward = nft.level * 10 * 10**18; // Reward based on level
+
+        nfdToken.transfer(msg.sender, reward);
+
+        emit RewardClaimed(msg.sender, reward);
+    }
+
+    function addToWhitelist(address player) external onlyOwner {
+        whitelist[player] = true;
+    }
+
+    function removeFromWhitelist(address player) external onlyOwner {
+        whitelist[player] = false;
+    }
+
+    function getNFTDetails(uint256 tokenId) external view returns (NFTData memory) {
+        return nftData[tokenId];
+    }
+}
