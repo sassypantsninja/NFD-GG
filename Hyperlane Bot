@@ -1,0 +1,55 @@
+import os
+import tweepy
+import requests
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Twitter API credentials
+TWITTER_API_KEY = os.getenv('TWITTER_API_KEY')
+TWITTER_API_SECRET = os.getenv('TWITTER_API_SECRET')
+TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
+TWITTER_ACCESS_SECRET = os.getenv('TWITTER_ACCESS_SECRET')
+
+# Connect to Twitter API
+auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
+auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)
+api = tweepy.API(auth)
+
+# Function to search for airdrop keywords on Twitter
+def search_airdrops():
+    print("Searching for airdrop tweets related to Hyperlane Protocol...")
+    tweets = api.search_tweets(q="hyperlane protocol airdrop OR #hyperlaneAirdrop OR #airdrop", lang="en", count=10)
+    for tweet in tweets:
+        print(f"Found airdrop tweet: {tweet.text}")
+        # Logic to filter and process relevant airdrops
+        if 'claim' in tweet.text.lower():
+            print("Relevant airdrop found. Proceeding to claim...")
+            # Call function to claim airdrop (dummy example)
+            claim_hyperlane_airdrop("<PRIVATE_KEY>", "<CONTRACT_ADDRESS>", "<CLAIM_FUNCTION>")
+
+# Placeholder for Hyperlane Protocol interaction (Replace with actual SDK/API functions)
+def claim_hyperlane_airdrop(private_key, contract_address, claim_function):
+    # Example placeholder for Hyperlane SDK interaction
+    # Replace this with actual code to interact with the Hyperlane blockchain
+    print("Claiming airdrop on Hyperlane Protocol...")
+    # hyperlane_sdk = HyperlaneSDK(...)  # Initialize the Hyperlane SDK or equivalent API calls
+    # hyperlane_sdk.claimAirdrop(private_key, contract_address, claim_function)
+    print("Airdrop claim transaction sent")
+
+# Optional: Function to check Hyperlane-specific airdrop announcements
+def check_hyperlane_announcements():
+    print("Checking Hyperlane Protocol announcements for airdrops...")
+    response = requests.get('https://hyperlane-protocol-announcements-url.com/airdrop')  # Replace with actual URL
+    if response.status_code == 200:
+        airdrops = response.json()
+        for airdrop in airdrops:
+            print(f"Found airdrop: {airdrop['title']} - {airdrop['details']}")
+
+if __name__ == "__main__":
+    # Monitor Twitter for airdrop announcements
+    search_airdrops()
+
+    # Check Hyperlane-specific announcements
+    check_hyperlane_announcements()
