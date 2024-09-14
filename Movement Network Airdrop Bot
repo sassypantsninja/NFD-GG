@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract MovementNetworkAirdropBot {
+    // Owner of the contract
+    address public owner;
+    
+    // Amount of tokens to distribute per user
+    uint256 public tokenAmount;
+
+    // Deadline for airdrop participation
+    uint256 public deadline;
+
+    // Bot prevention time delay (in seconds)
+    uint256 public registrationDelay;
+
+    // Mapping to track registered users, task completion, and token claims
+    mapping(address => bool) public isRegistered;
+    mapping(address => bool) public hasCompletedTasks;
+    mapping(address => bool) public hasClaimedTokens;
+    mapping(address => uint256) public registrationTimestamp;
+
+    // List of eligible participants
+    address[] public eligibleParticipants;
+
+    // ERC20 token interface
+    IERC20 public token;
+
+    // Event declarations
+    event UserRegistered(address indexed user);
+    event TaskCompleted(address indexed user);
+    event TokensClaimed(address indexed user, uint256 amount);
+
+    // Modifier to restrict access to owner
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not the owner");
+        _;
+    }
+
+    // Constructor to initialize contract with token, token amount, and deadline
+    constructor(
+        address _tokenAddress, 
+        uint256 _tokenAmount, 
+        uint256 _durationInDays,
+        uint256 _registrationDelay
+    ) {
+        owner = msg.sender;
+        token = IERC20(_tokenAddress);
+        tokenAmount = _tokenAmount;
+        deadline = block.timestamp + (_durationInDays * 1 days);
+        registrationDelay = _registrationDelay; // Time delay for bot prevention
+    }
+
+    // Function for users to register for the airdrop
+    function register() external {
+        require(block.timestamp < deadline, "Airdrop registration closed");
+        require(!isRegistered[msg.sender], "Already registered");
+        require(block.timestamp >= registrationTimestamp[msg.sender] + registrationDelay, "Please wait before registering");
+
+        // Mark user as registered and set registration time
+        isRegistered[msg.sender] = true;
+        registrationTimestamp[msg.sender] = block.timestamp;
+        emit UserRegistered(msg.sender);
+    }
+
+    // Function for owner to verify task completion
+    function verifyTaskCompletion(address _user) external onlyOwner {
+        require(isRegistered[_user], "User not registered");
+        require(!hasCompletedTasks[_user], "Tasks already verified");
+
+        // Mark tasks as completed
+        hasCompletedTasks[_user] = true;
+        eligibleParticipants.push(_user);
+        emit TaskCompleted(_user);
+    }
+
+    // Function for eligible users to claim their tokens
+    function claimTokens() external {
+        require(block.timestamp >= deadline, "Airdrop still ongoing");
+        require(isRegistered[msg.sender], "User not registered");
+        require(hasCompletedTasks[msg.sender], "Tasks not completed");
+        require(!hasClaimedTokens[msg.sender], "Tokens already claimed");
+
+        // Transfer tokens to user
+        require(token.transfer(msg.sender, tokenAmount), "Token transfer failed");
+
+        hasClaimedTokens[msg.sender] = true;
+        emit TokensClaimed(msg.sender, tokenAmount);
+    }
+
+    // Function for owner to withdraw remaining tokens after the airdrop ends
+    function withdrawRemainingTokens() external onlyOwner {
+        require(block.timestamp > deadline, "Airdrop not yet ended");
+
+        uint256 remainingTokens = token.balanceOf(address(this));
+        require(remainingTokens > 0, "No tokens left to withdraw");
+
+        token.transfer(owner, remainingTokens);
+    }
+}
+
+// ERC20 Interface for interacting with tokens
+interface IERC20 {
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
