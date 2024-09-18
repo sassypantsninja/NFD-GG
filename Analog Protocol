@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract AnalogAirdropBot {
+    // Owner of the contract
+    address public owner;
+
+    // ERC20 token to be airdropped
+    IERC20 public airdropToken;
+
+    // Amount of tokens to distribute per eligible user
+    uint256 public tokenAmount;
+
+    // Deadline for the airdrop registration
+    uint256 public registrationDeadline;
+
+    // Delay between user registrations (anti-bot mechanism)
+    uint256 public registrationDelay;
+
+    // Mapping to store user registration, task completion, and token claim status
+    mapping(address => bool) public isRegistered;
+    mapping(address => bool) public hasCompletedTasks;
+    mapping(address => bool) public hasClaimedTokens;
+    mapping(address => uint256) public lastRegistrationTime;
+
+    // List of eligible users
+    address[] public eligibleUsers;
+
+    // Event declarations for tracking key actions
+    event UserRegistered(address indexed user);
+    event TaskCompleted(address indexed user);
+    event TokensClaimed(address indexed user, uint256 amount);
+
+    // Modifier to restrict certain functions to the owner
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner can call this function");
+        _;
+    }
+
+    // Constructor to initialize the contract with token address, token amount, duration, and registration delay
+    constructor(
+        address _tokenAddress,
+        uint256 _tokenAmount,
+        uint256 _durationInDays,
+        uint256 _registrationDelay
+    ) {
+        owner = msg.sender;
+        airdropToken = IERC20(_tokenAddress);
+        tokenAmount = _tokenAmount;
+        registrationDeadline = block.timestamp + (_durationInDays * 1 days);
+        registrationDelay = _registrationDelay;
+    }
+
+    // Function for users to register for the airdrop
+    function register() external {
+        require(block.timestamp < registrationDeadline, "Airdrop registration is closed");
+        require(!isRegistered[msg.sender], "User already registered");
+        require(block.timestamp >= lastRegistrationTime[msg.sender] + registrationDelay, "Wait before registering again");
+
+        // Mark the user as registered
+        isRegistered[msg.sender] = true;
+        lastRegistrationTime[msg.sender] = block.timestamp;
+
+        emit UserRegistered(msg.sender);
+    }
+
+    // Function for the owner to verify task completion
+    function verifyTaskCompletion(address _user) external onlyOwner {
+        require(isRegistered[_user], "User not registered");
+        require(!hasCompletedTasks[_user], "Tasks already verified");
+
+        // Mark the tasks as completed
+        hasCompletedTasks[_user] = true;
+        eligibleUsers.push(_user);
+
+        emit TaskCompleted(_user);
+    }
+
+    // Function for eligible users to claim their airdrop tokens
+    function claimTokens() external {
+        require(block.timestamp >= registrationDeadline, "Airdrop not ended yet");
+        require(isRegistered[msg.sender], "User not registered");
+        require(hasCompletedTasks[msg.sender], "Task not completed");
+        require(!hasClaimedTokens[msg.sender], "Tokens already claimed");
+
+        // Transfer the airdrop tokens to the user
+        require(airdropToken.transfer(msg.sender, tokenAmount), "Token transfer failed");
+
+        // Mark tokens as claimed
+        hasClaimedTokens[msg.sender] = true;
+
+        emit TokensClaimed(msg.sender, tokenAmount);
+    }
+
+    // Function for the owner to withdraw unclaimed tokens after the airdrop period ends
+    function withdrawUnclaimedTokens() external onlyOwner {
+        require(block.timestamp > registrationDeadline, "Airdrop not ended yet");
+
+        uint256 remainingTokens = airdropToken.balanceOf(address(this));
+        require(remainingTokens > 0, "No tokens left to withdraw");
+
+        // Transfer remaining tokens to the owner
+        airdropToken.transfer(owner, remainingTokens);
+    }
+}
+
+// ERC20 Interface to interact with tokens
+interface IERC20 {
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
