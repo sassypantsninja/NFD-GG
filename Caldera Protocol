@@ -1,0 +1,70 @@
+from web3 import Web3
+import time
+
+# Connect to Ethereum node
+infura_url = "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+web3 = Web3(Web3.HTTPProvider(infura_url))
+
+# Check if connected
+if web3.isConnected():
+    print("Connected to Ethereum network")
+else:
+    raise Exception("Unable to connect to Ethereum network")
+
+# User's wallet address and private key
+wallet_address = "YOUR_WALLET_ADDRESS"
+private_key = "YOUR_PRIVATE_KEY"
+
+# Caldera airdrop contract address and ABI (Application Binary Interface)
+caldera_airdrop_address = web3.toChecksumAddress("CALDERA_AIRDROP_CONTRACT_ADDRESS")
+caldera_airdrop_abi = [
+    # ABI snippet here (you'd need the actual contract ABI to proceed)
+]
+
+# Load contract
+contract = web3.eth.contract(address=caldera_airdrop_address, abi=caldera_airdrop_abi)
+
+# Function to claim airdrop
+def claim_airdrop():
+    nonce = web3.eth.getTransactionCount(wallet_address)
+    
+    # Build the transaction to claim airdrop
+    txn = contract.functions.claimAirdrop(wallet_address).buildTransaction({
+        'chainId': 1,  # Ethereum mainnet
+        'gas': 200000,  # Estimate this properly using gas estimation tools
+        'gasPrice': web3.toWei('50', 'gwei'),  # Set gas price appropriately
+        'nonce': nonce
+    })
+    
+    # Sign the transaction with private key
+    signed_txn = web3.eth.account.sign_transaction(txn, private_key=private_key)
+    
+    # Send the transaction
+    txn_hash = web3.eth.sendRawTransaction(signed_txn.rawTransaction)
+    print(f"Airdrop claim transaction sent. Txn hash: {txn_hash.hex()}")
+    
+    # Wait for transaction receipt
+    txn_receipt = web3.eth.waitForTransactionReceipt(txn_hash)
+    if txn_receipt['status'] == 1:
+        print("Airdrop claimed successfully!")
+    else:
+        print("Airdrop claim failed!")
+
+# Loop to constantly check and claim airdrops (interval can be adjusted)
+while True:
+    try:
+        # Assume a function `isEligibleForAirdrop()` exists in the contract
+        eligible = contract.functions.isEligibleForAirdrop(wallet_address).call()
+        
+        if eligible:
+            print("Eligible for airdrop, attempting to claim...")
+            claim_airdrop()
+        else:
+            print("Not eligible yet, retrying in 10 minutes...")
+        
+        # Wait 10 minutes before checking again
+        time.sleep(600)
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        time.sleep(600)  # Retry after 10 minutes in case of an error
