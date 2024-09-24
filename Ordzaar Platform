@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IOrdzaarAirdrop {
+    function claimAirdrop(address recipient) external returns (bool);
+    function isEligibleForAirdrop(address recipient) external view returns (bool);
+}
+
+contract MultiWalletAirdropHunter {
+
+    address public owner;
+    address public ordzaarAirdropContract;
+
+    // A mapping to store which addresses have already claimed their airdrop
+    mapping(address => bool) public claimedAirdrops;
+    
+    // Array to keep track of multiple addresses for airdrop claiming
+    address[] public airdropWallets;
+
+    // Modifier to restrict functions to the owner
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not the contract owner");
+        _;
+    }
+
+    // Event to notify when an airdrop is claimed
+    event AirdropClaimed(address indexed recipient, bool success);
+
+    // Constructor to initialize the airdrop contract
+    constructor(address _ordzaarAirdropContract) {
+        owner = msg.sender;
+        ordzaarAirdropContract = _ordzaarAirdropContract;
+    }
+
+    // Function to claim airdrop for a specific recipient
+    function claimFor(address recipient) public onlyOwner returns (bool success) {
+        require(!claimedAirdrops[recipient], "Airdrop already claimed for this address");
+
+        IOrdzaarAirdrop airdropContract = IOrdzaarAirdrop(ordzaarAirdropContract);
+
+        // Check eligibility for airdrop
+        bool eligible = airdropContract.isEligibleForAirdrop(recipient);
+        require(eligible, "Address not eligible for airdrop");
+
+        // Claim the airdrop
+        bool claimed = airdropContract.claimAirdrop(recipient);
+        require(claimed, "Airdrop claim failed");
+
+        // Mark as claimed
+        claimedAirdrops[recipient] = true;
+        
+        // Emit event for successful claim
+        emit AirdropClaimed(recipient, claimed);
+
+        return claimed;
+    }
+
+    // Function to claim airdrops for all stored wallets
+    function claimForAll() public onlyOwner {
+        for (uint i = 0; i < airdropWallets.length; i++) {
+            address wallet = airdropWallets[i];
+            if (!claimedAirdrops[wallet]) {
+                claimFor(wallet);
+            }
+        }
+    }
+
+    // Function to add a wallet to the airdrop wallets list
+    function addAirdropWallet(address wallet) public onlyOwner {
+        require(wallet != address(0), "Invalid wallet address");
+        airdropWallets.push(wallet);
+    }
+
+    // Function to add multiple wallets at once
+    function addMultipleAirdropWallets(address[] memory wallets) public onlyOwner {
+        for (uint i = 0; i < wallets.length; i++) {
+            addAirdropWallet(wallets[i]);
+        }
+    }
+
+    // Function to update the airdrop contract address
+    function updateAirdropContract(address _newContract) public onlyOwner {
+        ordzaarAirdropContract = _newContract;
+    }
+
+    // Fallback function to allow contract to receive ETH
+    receive() external payable {}
+
+    // Function to withdraw ETH in the contract to the owner
+    function withdraw() public onlyOwner {
+        payable(owner).transfer(address(this).balance);
+    }
+
+    // Function to destroy the contract and send remaining ETH to the owner
+    function destroy() public onlyOwner {
+        selfdestruct(payable(owner));
+    }
+
+    // Function to check the number of stored wallets
+    function getAirdropWalletCount() public view returns (uint) {
+        return airdropWallets.length;
+    }
+
+    // Function to check the wallet stored at a specific index
+    function getAirdropWallet(uint index) public view returns (address) {
+        require(index < airdropWallets.length, "Index out of bounds");
+        return airdropWallets[index];
+    }
+}
