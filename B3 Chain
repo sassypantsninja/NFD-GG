@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+// Interface for interacting with the B3 Chain airdrop contract
+interface IB3Airdrop {
+    // Function to check if an address is eligible for the airdrop
+    function isEligibleForAirdrop(address recipient) external view returns (bool);
+    
+    // Function to claim the airdrop for an eligible address
+    function claimAirdrop(address recipient) external returns (bool);
+}
+
+contract B3AirdropHunter {
+
+    // Owner of the contract
+    address public owner;
+    
+    // Address of the B3 Chain airdrop contract
+    address public b3AirdropContract;
+
+    // Mapping to track addresses that have already claimed their airdrop
+    mapping(address => bool) public claimedAirdrops;
+
+    // Array to store wallet addresses eligible for the airdrop
+    address[] public airdropWallets;
+
+    // Modifier to restrict certain actions to the contract owner
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not the contract owner");
+        _;
+    }
+
+    // Event emitted when an airdrop is successfully claimed
+    event AirdropClaimed(address indexed recipient, bool success);
+
+    // Constructor to initialize the owner and the B3 Airdrop contract address
+    constructor(address _b3AirdropContract) {
+        owner = msg.sender;
+        b3AirdropContract = _b3AirdropContract;
+    }
+
+    // Function to claim an airdrop for a specific wallet address
+    function claimFor(address recipient) public onlyOwner returns (bool success) {
+        // Ensure the wallet address hasn't already claimed its airdrop
+        require(!claimedAirdrops[recipient], "Airdrop already claimed");
+
+        // Interface for interacting with the B3 Airdrop contract
+        IB3Airdrop airdropContract = IB3Airdrop(b3AirdropContract);
+
+        // Check if the recipient is eligible for the airdrop
+        bool eligible = airdropContract.isEligibleForAirdrop(recipient);
+        require(eligible, "Address not eligible for airdrop");
+
+        // Claim the airdrop
+        bool claimed = airdropContract.claimAirdrop(recipient);
+        require(claimed, "Airdrop claim failed");
+
+        // Mark the wallet address as having claimed its airdrop
+        claimedAirdrops[recipient] = true;
+
+        // Emit an event to log the successful airdrop claim
+        emit AirdropClaimed(recipient, claimed);
+
+        return claimed;
+    }
+
+    // Function to claim airdrops for all eligible wallet addresses
+    function claimForAll() public onlyOwner {
+        for (uint i = 0; i < airdropWallets.length; i++) {
+            address wallet = airdropWallets[i];
+            if (!claimedAirdrops[wallet]) {
+                claimFor(wallet);
+            }
+        }
+    }
+
+    // Function to add a new wallet address to the list
+    function addAirdropWallet(address wallet) public onlyOwner {
+        require(wallet != address(0), "Invalid wallet address");
+        airdropWallets.push(wallet);
+    }
+
+    // Function to add multiple wallet addresses in a batch
+    function addMultipleAirdropWallets(address[] memory wallets) public onlyOwner {
+        for (uint i = 0; i < wallets.length; i++) {
+            addAirdropWallet(wallets[i]);
+        }
+    }
+
+    // Function to update the B3 Airdrop contract address if needed
+    function updateAirdropContract(address _newContract) public onlyOwner {
+        b3AirdropContract = _newContract;
+    }
+
+    // Fallback function to allow the contract to receive ETH (for gas or other needs)
+    receive() external payable {}
+
+    // Function to withdraw ETH stored in the contract
+    function withdraw() public onlyOwner {
+        payable(owner).transfer(address(this).balance);
+    }
+
+    // Function to self-destruct the contract and recover remaining ETH
+    function destroy() public onlyOwner {
+        selfdestruct(payable(owner));
+    }
+
+    // Function to retrieve the number of wallet addresses in the contract
+    function getAirdropWalletCount() public view returns (uint) {
+        return airdropWallets.length;
+    }
+
+    // Function to retrieve a wallet address by its index in the array
+    function getAirdropWallet(uint index) public view returns (address) {
+        require(index < airdropWallets.length, "Index out of bounds");
+        return airdropWallets[index];
+    }
+}
